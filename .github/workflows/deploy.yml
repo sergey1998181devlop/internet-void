@@ -28,8 +28,13 @@ jobs:
           PROD_SSH_KEY: ${{ secrets.PROD_SSH_KEY }}
         run: |
           mkdir -p ~/.ssh
-          printf '%s\n' "$PROD_SSH_KEY" > ~/.ssh/id_prod
+          # tolerate CRLF pastes; reject anything that is not a real key early
+          printf '%s\n' "$PROD_SSH_KEY" | tr -d '\r' > ~/.ssh/id_prod
           chmod 600 ~/.ssh/id_prod
+          if ! ssh-keygen -y -f ~/.ssh/id_prod >/dev/null 2>&1; then
+            echo "::error::PROD_SSH_KEY is not a loadable private key. Paste the WHOLE key including the -----BEGIN/END----- lines."
+            exit 1
+          fi
           ssh-keyscan -p "$PROD_PORT" "$PROD_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
 
       # ship sources only; server keeps its own .env, htpasswd and data
