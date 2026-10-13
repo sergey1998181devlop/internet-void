@@ -1,0 +1,68 @@
+name: Deploy to prod
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# one deploy at a time; an in-flight deploy is never cancelled mid-build
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: rsync + docker compose build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      # ship sources only; server keeps its own .env, htpasswd and data
+      - name: Sync sources to the server
+        uses: appleboy/rsync-action@v1
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          port: ${{ secrets.PROD_PORT || 22 }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          source: ./
+          target: ${{ secrets.PROD_PATH }}
+          rm: false
+          args: >-
+            --links
+            --times
+            --compress
+            --exclude=.git
+            --exclude=.github
+            --exclude='**/node_modules'
+            --exclude=.env
+            --exclude=nginx/htpasswd
+            --exclude=.DS_Store
+
+      - name: Build and roll over on the server
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          port: ${{ secrets.PROD_PORT || 22 }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          script: |
+            set -e
+            cd "${{ secrets.PROD_PATH }}"
+            docker compose build backend frontend
+            docker compose up -d backend frontend
+            # wait for nginx to answer; the gate always lets 127.0.0.1 through
+            ok=0
+            for i in $(seq 1 30); do
+              if curl -fsS http://127.0.0.1:8080/ >/dev/null 2>&1; then ok=1; break; fi
+              sleep 2
+            done
+            if [ "$ok" != "1" ]; then
+              echo "healthcheck failed" >&2
+              docker compose ps >&2 || true
+              docker compose logs --tail=50 backend nginx >&2 || true
+              exit 1
+            fi
+            docker image prune -f >/dev/null 2>&1 || true
+            echo "deployed ok"
