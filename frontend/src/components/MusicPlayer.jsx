@@ -97,7 +97,7 @@ export default function MusicPlayer() {
       <div
         className={`pointer-events-auto absolute right-2 top-[58px] z-30 max-w-[calc(100vw-1rem)] items-center gap-2 rounded-2xl border border-white/15 bg-black/55 p-2 pr-3 shadow-[0_8px_30px_rgba(0,0,0,0.45)] backdrop-blur-md sm:right-6 sm:top-[78px] ${
           open ? 'flex' : 'hidden'
-        } sm:flex`}
+        } sm:flex [@media(max-height:480px)]:hidden!`}
       >
         {track ? (
           <img
