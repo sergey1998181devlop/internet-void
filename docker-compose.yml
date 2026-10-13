@@ -61,7 +61,9 @@ services:
   nginx:
     image: nginx:1.27-alpine
     ports:
-      - "8080:80"
+      # prod sets HTTP_ADDR=127.0.0.1 + HTTP_PORT=8080 in .env and puts a
+      # TLS-terminating Caddy on the public 80/443; defaults keep local dev
+      - "${HTTP_ADDR:-0.0.0.0}:${HTTP_PORT:-8080}:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       # pre-launch gate: run ./scripts/gen-entry.sh after editing ENTRY_* in
