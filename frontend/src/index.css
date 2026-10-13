@@ -1,0 +1,914 @@
+@import 'tailwindcss';
+
+/* custom cursors: default = rocket, pointer = saturn rocket */
+html,
+body,
+#root,
+#root * {
+  cursor: url('/cursors/cursor.png') 1 1, auto;
+}
+
+#root a,
+#root button,
+#root select,
+#root summary,
+#root label,
+#root [role='button'],
+#root .cursor-pointer,
+#root input[type='file'] {
+  cursor: url('/cursors/cursor-finger.png') 17 0, pointer;
+}
+
+/* the icons inside those controls match `#root *` directly, which beats the
+   inherited cursor — keep the finger over every descendant (svg, spans, …) */
+#root :is(a, button, select, summary, [role='button'], .cursor-pointer, input[type='file'])
+  * {
+  cursor: url('/cursors/cursor-finger.png') 17 0, pointer;
+}
+
+#root :where(
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='button']):not([type='submit']):not([type='reset']):not([type='file']),
+  textarea,
+  [contenteditable='true']
+) {
+  cursor: text;
+}
+
+#root :is(button, input, select, textarea):disabled,
+#root [class*='cursor-not-allowed']:disabled {
+  cursor: not-allowed;
+}
+
+#root :is(button, input, select, textarea):disabled[class*='cursor-wait'],
+#root .cursor-wait:disabled {
+  cursor: wait;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  background: #000;
+  overflow: hidden;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+}
+
+canvas {
+  display: block;
+  touch-action: none;
+}
+
+select option {
+  background: #000;
+  color: #fff;
+}
+
+@keyframes void-pop {
+  0% {
+    transform: scale(0.7);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* thin scrollbar inside the cabinet */
+.overflow-y-auto::-webkit-scrollbar {
+  width: 6px;
+}
+.overflow-y-auto::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+}
+
+/* ---------------------------------------------------------------------------
+   Tier & secret effects
+   --------------------------------------------------------------------------- */
+
+/* global screen shake (applied to #void-root, --shk in px, --shk-scale for
+   overscan so no black edges peek through) */
+@keyframes void-shake {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(var(--shk-scale, 1.02));
+  }
+  15% {
+    transform: translate(calc(var(--shk, 4px) * -1), calc(var(--shk, 4px) * 0.7)) scale(var(--shk-scale, 1.02));
+  }
+  35% {
+    transform: translate(var(--shk, 4px), calc(var(--shk, 4px) * -0.6)) scale(var(--shk-scale, 1.02));
+  }
+  55% {
+    transform: translate(calc(var(--shk, 4px) * 0.7), var(--shk, 4px)) scale(var(--shk-scale, 1.02));
+  }
+  75% {
+    transform: translate(calc(var(--shk, 4px) * -0.5), calc(var(--shk, 4px) * -0.8)) scale(var(--shk-scale, 1.02));
+  }
+}
+.void-shake {
+  animation: void-shake 0.45s linear;
+}
+
+/* full stillness for a minute: the panels sink to a whisper while the void
+   keeps drifting on its own — any input snaps them straight back */
+body.void-afk #void-root > *:not(:first-child) {
+  opacity: 0.35;
+  transition: opacity 1.4s ease;
+}
+
+/* lifecycle wrapper: every fx fades in fast and out at the end */
+@keyframes fx-life {
+  0% {
+    opacity: 0;
+  }
+  4%,
+  88% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+.fx-life {
+  animation: fx-life var(--dur, 4s) linear both;
+}
+
+/* --- tier 1: micro impulse ------------------------------------------------ */
+@keyframes fx-coin-rise {
+  0% {
+    transform: translate(-50%, -50%) translateY(30vh) scale(0.4) rotate(-180deg);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  70% {
+    transform: translate(-50%, -50%) translateY(-8vh) scale(1.15) rotate(10deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) translateY(-24vh) scale(0.7) rotate(40deg);
+    opacity: 0;
+  }
+}
+.fx-coin-rise {
+  animation: fx-coin-rise 1.2s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
+@keyframes fx-spark {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(calc(-50% + var(--dx, 40px)), calc(-50% + var(--dy, 40px))) scale(0.15);
+    opacity: 0;
+  }
+}
+.fx-spark {
+  animation: fx-spark 0.85s ease-out both;
+}
+
+@keyframes fx-float-up {
+  0% {
+    transform: translate(-50%, 14px) scale(0.85);
+    opacity: 0;
+  }
+  18% {
+    transform: translate(-50%, 0) scale(1);
+    opacity: 1;
+  }
+  75% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -46px) scale(0.98);
+    opacity: 0;
+  }
+}
+.fx-float-up {
+  animation: fx-float-up 1.5s ease-out both;
+}
+
+/* --- shared card ---------------------------------------------------------- */
+@keyframes fx-card-in {
+  0% {
+    transform: translate(-50%, -50%) scale(0.55) rotateX(35deg);
+    opacity: 0;
+  }
+  16% {
+    transform: translate(-50%, -50%) scale(1.05) rotateX(0deg);
+    opacity: 1;
+  }
+  26%,
+  84% {
+    transform: translate(-50%, -50%) scale(1) rotateX(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(0.94) rotateX(-8deg);
+    opacity: 0;
+  }
+}
+.fx-card {
+  animation: fx-card-in var(--cdur, 4s) cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes fx-shine {
+  0% {
+    transform: translateX(-140%) skewX(-18deg);
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(360%) skewX(-18deg);
+    opacity: 0;
+  }
+}
+.fx-shine {
+  animation: fx-shine 1s 0.45s ease-out both;
+}
+
+/* --- tier 2: energy charge ------------------------------------------------ */
+@keyframes fx-edge-pulse {
+  0% {
+    opacity: 0;
+  }
+  25% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+.fx-edge {
+  animation: fx-edge-pulse 1.6s ease-out 2 both;
+}
+
+/* --- tier 3: gamma ray ---------------------------------------------------- */
+@keyframes fx-bolt {
+  0% {
+    opacity: 0;
+    stroke-dashoffset: 400;
+  }
+  6% {
+    opacity: 1;
+  }
+  30% {
+    opacity: 0.85;
+    stroke-dashoffset: 0;
+  }
+  55% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 0;
+    stroke-dashoffset: 0;
+  }
+}
+.fx-bolt {
+  stroke-dasharray: 400;
+  animation: fx-bolt 2.6s ease-out infinite;
+}
+
+/* --- tier 4: showtime portal --------------------------------------------- */
+@keyframes fx-portal-in {
+  0% {
+    transform: translate(-50%, -50%) scale(0);
+    opacity: 0;
+  }
+  55% {
+    transform: translate(-50%, -50%) scale(1.12);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+}
+.fx-portal {
+  animation: fx-portal-in 0.8s cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+@keyframes fx-ring-spin {
+  from {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+@keyframes fx-ring-spin-rev {
+  from {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  to {
+    transform: translate(-50%, -50%) rotate(-360deg);
+  }
+}
+.fx-ring {
+  animation: fx-ring-spin 5s linear infinite;
+}
+.fx-ring-rev {
+  animation: fx-ring-spin-rev 7s linear infinite;
+}
+@keyframes fx-core-pulse {
+  0%,
+  100% {
+    opacity: 0.75;
+    filter: blur(14px);
+  }
+  50% {
+    opacity: 1;
+    filter: blur(24px);
+  }
+}
+.fx-core {
+  animation: fx-core-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes fx-dim {
+  0% {
+    opacity: 0;
+  }
+  15%,
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+.fx-dim {
+  animation: fx-dim var(--dur, 4s) ease both;
+}
+
+/* --- tier 5: meteor storm / UI shatter ------------------------------------ */
+@keyframes fx-shard {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) rotate(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--tx, 30px), var(--ty, 60px)) rotate(var(--rot, 12deg));
+  }
+}
+.fx-shard {
+  animation: fx-shard 0.85s cubic-bezier(0.4, 0, 0.9, 0.6) both !important;
+}
+@keyframes fx-reassemble {
+  0% {
+    opacity: 0.15;
+    transform: scale(0.97);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.fx-reassemble {
+  animation: fx-reassemble 0.45s ease-out;
+}
+@keyframes fx-pin-in {
+  0% {
+    transform: translateX(40px);
+    opacity: 0;
+  }
+  18% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+.fx-pin {
+  animation: fx-pin-in 0.6s cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+
+/* --- tier 6: boss attack -------------------------------------------------- */
+@keyframes fx-ship {
+  0% {
+    transform: translateX(-46vw) translateY(2vh) rotate(-7deg);
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  22% {
+    transform: translateX(0) translateY(0) rotate(0deg);
+    opacity: 1;
+  }
+  62% {
+    transform: translateX(0) translateY(0) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(78vw) translateY(-4vh) rotate(6deg);
+    opacity: 1;
+  }
+}
+.fx-ship {
+  animation: fx-ship var(--dur, 7s) cubic-bezier(0.45, 0, 0.4, 1) both;
+}
+@keyframes fx-engine {
+  0%,
+  100% {
+    opacity: 0.65;
+    transform: scaleX(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scaleX(1.2);
+  }
+}
+.fx-engine {
+  transform-box: fill-box;
+  transform-origin: left center;
+  animation: fx-engine 0.16s ease-in-out infinite;
+}
+@keyframes fx-beam {
+  0% {
+    opacity: 0;
+    transform: scaleX(0.05);
+  }
+  7% {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+  12% {
+    opacity: 0.55;
+  }
+  18% {
+    opacity: 1;
+  }
+  78% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: scaleX(1);
+  }
+}
+.fx-beam {
+  animation: fx-beam 3.1s 1.7s ease-out both;
+  transform-origin: left center;
+}
+@keyframes fx-flash-hit {
+  0% {
+    opacity: 0;
+  }
+  30% {
+    opacity: 0.85;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+.fx-flash-hit {
+  animation: fx-flash-hit 0.4s 1.7s linear both;
+}
+@keyframes fx-impact {
+  0% {
+    transform: translate(-50%, -50%) scale(0.3);
+    opacity: 0;
+  }
+  14% {
+    transform: translate(-50%, -50%) scale(1.08);
+    opacity: 1;
+  }
+  24%,
+  76% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.04);
+    opacity: 0;
+  }
+}
+.fx-impact {
+  animation: fx-impact var(--idur, 5.3s) var(--idelay, 2.1s) cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+/* --- tier 7: divine ------------------------------------------------------- */
+.void-divine-gold {
+  filter: hue-rotate(42deg) saturate(1.4) contrast(1.06);
+  transition: filter 2.5s ease;
+}
+.void-divine-cyber {
+  filter: hue-rotate(155deg) saturate(1.55) contrast(1.1);
+  transition: filter 2.5s ease;
+}
+.void-divine-cosmos {
+  filter: hue-rotate(265deg) saturate(1.45);
+  transition: filter 2.5s ease;
+}
+@keyframes fx-rays {
+  from {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+.fx-rays {
+  animation: fx-rays 16s linear infinite;
+}
+@keyframes fx-divine-in {
+  0% {
+    transform: translate(-50%, -50%) scale(0.4);
+    opacity: 0;
+  }
+  14% {
+    transform: translate(-50%, -50%) scale(1.08);
+    opacity: 1;
+  }
+  24%,
+  86% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.12);
+    opacity: 0;
+  }
+}
+.fx-divine {
+  animation: fx-divine-in var(--cdur, 10s) ease both;
+}
+@keyframes fx-badge-in {
+  0% {
+    transform: translateX(60px);
+    opacity: 0;
+  }
+  25% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+.fx-badge {
+  animation: fx-badge-in 0.8s 0.6s cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+
+/* --- secrets -------------------------------------------------------------- */
+@keyframes fx-pie {
+  0% {
+    transform: translate(-50%, -50%) translate(-130vw, -45vh) rotate(-560deg) scale(0.5);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  72% {
+    transform: translate(-50%, -50%) translate(0, 0) rotate(0deg) scale(1.15);
+    opacity: 1;
+  }
+  84%,
+  100% {
+    transform: translate(-50%, -50%) translate(0, 0) rotate(0deg) scale(1.35);
+    opacity: 0;
+  }
+}
+.fx-pie {
+  animation: fx-pie 1.7s cubic-bezier(0.3, 0.4, 0.4, 1) both;
+}
+@keyframes fx-splat-blob {
+  0% {
+    transform: translate(-50%, -50%) scale(0.25);
+    opacity: 1;
+  }
+  70% {
+    opacity: 0.9;
+  }
+  100% {
+    transform: translate(calc(-50% + var(--dx, 40px)), calc(-50% + var(--dy, 40px))) scale(1);
+    opacity: 0;
+  }
+}
+.fx-splat-blob {
+  animation: fx-splat-blob 2.2s ease-out both;
+}
+
+@keyframes fx-demon-pulse {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+.fx-demon {
+  animation: fx-demon-pulse 1.15s ease-in-out infinite;
+}
+@keyframes fx-flicker {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  41% {
+    opacity: 0.35;
+  }
+  43% {
+    opacity: 1;
+  }
+  77% {
+    opacity: 0.2;
+  }
+  79% {
+    opacity: 1;
+  }
+  87% {
+    opacity: 0.6;
+  }
+  89% {
+    opacity: 1;
+  }
+}
+.fx-flicker {
+  animation: fx-flicker 2.2s linear infinite;
+}
+
+@keyframes fx-reel {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(-85.714%);
+  }
+}
+.fx-reel {
+  animation: fx-reel var(--rdur, 1.5s) steps(6, end) 0.25s both;
+}
+@keyframes fx-jackpot-in {
+  0% {
+    transform: translate(-50%, -50%) scale(3.4);
+    opacity: 0;
+    filter: blur(10px);
+  }
+  26% {
+    transform: translate(-50%, -50%) scale(0.94);
+    opacity: 1;
+    filter: blur(0);
+  }
+  36% {
+    transform: translate(-50%, -50%) scale(1.02);
+  }
+  44%,
+  84% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.1);
+    opacity: 0;
+  }
+}
+.fx-jackpot {
+  animation: fx-jackpot-in 4.6s 2.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.fx-scanlines {
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.42) 0 2px,
+    rgba(0, 0, 0, 0) 2px 4px
+  );
+}
+@keyframes fx-shades {
+  0% {
+    transform: translateY(-70px) rotate(-8deg);
+    opacity: 0;
+  }
+  55% {
+    transform: translateY(6px) rotate(2deg);
+    opacity: 1;
+  }
+  70%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 1;
+  }
+}
+.fx-shades {
+  animation: fx-shades 0.9s 1s cubic-bezier(0.3, 1.4, 0.5, 1) both;
+}
+@keyframes fx-pixel-pop {
+  0% {
+    transform: scale(1);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  12% {
+    transform: scale(1.06);
+  }
+  16% {
+    transform: scale(1);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.fx-pixel-pop {
+  animation: fx-pixel-pop 0.7s steps(4, end) both;
+}
+
+@keyframes fx-wave {
+  from {
+    transform: translateX(-60%);
+  }
+  to {
+    transform: translateX(60%);
+  }
+}
+.fx-wave {
+  animation: fx-wave 7s ease-in-out infinite alternate;
+}
+@keyframes fx-drift {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.35;
+  }
+  50% {
+    transform: translate(4vw, -3vh) scale(1.25);
+    opacity: 0.6;
+  }
+}
+.fx-drift {
+  animation: fx-drift 9s ease-in-out infinite;
+}
+@keyframes fx-breathe {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.3;
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.07);
+    opacity: 0.6;
+  }
+}
+.fx-breathe {
+  animation: fx-breathe 5s ease-in-out infinite;
+}
+
+/* --- feed side plates ----------------------------------------------------- */
+@keyframes feed-plate {
+  0% {
+    transform: translateX(130%);
+    opacity: 0;
+  }
+  9% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  87% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(130%);
+    opacity: 0;
+  }
+}
+.feed-plate {
+  animation: feed-plate 5.2s cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+
+/* --- ARG: reactions to secret triggers typed by the visitor --------------- */
+.void-flicker {
+  animation: void-flicker 0.75s steps(1) 1;
+}
+@keyframes void-flicker {
+  0%, 100% {
+    border-color: rgba(255, 255, 255, 0.2);
+    box-shadow: none;
+  }
+  15% {
+    border-color: rgba(255, 213, 80, 0.9);
+    box-shadow: 0 0 12px rgba(255, 190, 70, 0.5);
+  }
+  30% {
+    border-color: rgba(255, 255, 255, 0.2);
+    box-shadow: none;
+  }
+  45% {
+    border-color: rgba(255, 213, 80, 0.75);
+    box-shadow: 0 0 9px rgba(255, 190, 70, 0.4);
+  }
+  60% {
+    border-color: rgba(255, 255, 255, 0.2);
+    box-shadow: none;
+  }
+  75% {
+    border-color: rgba(255, 213, 80, 0.55);
+    box-shadow: 0 0 6px rgba(255, 190, 70, 0.3);
+  }
+}
+.void-redflash {
+  background: radial-gradient(
+    ellipse at center,
+    rgba(255, 42, 30, 0.42),
+    rgba(170, 12, 10, 0.16) 45%,
+    transparent 72%
+  );
+  animation: void-redflash 0.55s ease-out forwards;
+}
+@keyframes void-redflash {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+.void-ring-glow {
+  position: fixed;
+  z-index: 40;
+  width: 220px;
+  height: 220px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  background: radial-gradient(
+    circle,
+    rgba(255, 170, 50, 0.5),
+    rgba(255, 120, 10, 0.22) 45%,
+    transparent 70%
+  );
+}
+.void-ring-glow.l1 {
+  opacity: 0.4;
+}
+.void-ring-glow.l2 {
+  opacity: 0.7;
+  box-shadow: 0 0 32px rgba(255, 150, 30, 0.4);
+}
+.void-ring-glow.l3 {
+  opacity: 0.95;
+  box-shadow: 0 0 60px rgba(255, 165, 40, 0.65);
+}
+
+/* ARG: the rare glitch of the abyss —0.5-1s of digital noise over the form */
+.void-glitch {
+  backdrop-filter: invert(0.85) hue-rotate(160deg) saturate(2);
+  animation: void-glitch-shake 0.12s steps(2) infinite;
+}
+.void-glitch-noise {
+  position: absolute;
+  inset: 0;
+  background:
+    repeating-linear-gradient(0deg, rgba(255, 0, 64, 0.16) 0 2px, transparent 2px 5px),
+    repeating-linear-gradient(90deg, rgba(0, 255, 220, 0.12) 0 3px, transparent 3px 7px),
+    rgba(0, 0, 0, 0.4);
+  mix-blend-mode: screen;
+  animation: void-glitch-noise 0.18s steps(3) infinite;
+}
+.void-glitch-text {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  font-family: monospace;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #ff3b6b;
+  text-shadow: 2px 0 #00ffe0, -2px 0 #7a5cff;
+  animation: void-glitch-blink 0.3s steps(2) infinite;
+}
+@keyframes void-glitch-noise {
+  0% { transform: translateY(0); }
+  50% { transform: translateY(-6%); }
+  100% { transform: translateY(4%); }
+}
+@keyframes void-glitch-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+@keyframes void-glitch-shake {
+  0% { transform: translate(0); }
+  50% { transform: translate(1px, -1px); }
+  100% { transform: translate(-1px, 1px); }
+}
+
+/* TV remotes and keyboards: whatever the d-pad / tab lands on must glow */
+:where(button, a, select, input, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid rgba(252, 211, 77, 0.9);
+  outline-offset: 2px;
+}

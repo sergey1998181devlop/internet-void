@@ -1,0 +1,26 @@
+# VOID PROTOCOL SECURITY MANIFEST
+# DO NOT ACCESS RESTRICED ANOMALIES
+
+User-agent: *
+
+# Geometric Lock: The ratio of a circle's circumference to its diameter.
+Disallow: /pi-glitch/
+
+# Infernal Lock: Count of the Beast spoken in John's Revelation.
+Disallow: /demon-gate/
+
+# Casino Lock: The jackpot sequence on three mechanical reels.
+Disallow: /jackpot/
+
+# Elite Lock: How 1337 speaks without words.
+Disallow: /leetspeak/
+
+# Hitchhiker Lock: Don't forget your towel.
+Disallow: /answer-to-everything/
+
+# Motion Protocol: Loop your cursor in a vortex 3 times to bend light.
+# Physical Triggers: Singularity (4), Nakamoto (5), Missing Page (6), Never Gonna (R), Primordial (B).
+
+# ANOMALY LOG 3.14: Enter the price of the constant Archimedes used to measure the madness of a perfect circle...
+# ANOMALY LOG 13.37: Name the number in the tongue of first-wave hackers, where the letter 'E' forever became a three...
+# ANOMALY LOG GARGANTUA: Trace three full orbital circles with your cursor in the darkness, to ignite the event horizon...
