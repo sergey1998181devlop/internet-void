@@ -1,5 +1,6 @@
-import { useEffect, useSyncExternalStore, useState } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useStore, setState } from '../lib/store';
 import {
   subscribeMusic,
   getMusic,
@@ -14,11 +15,14 @@ import {
 const btn =
   'pointer-events-auto flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-white/20 bg-black/50 text-white/75 backdrop-blur transition hover:border-amber-300/60 hover:text-amber-200';
 
-export default function MusicPlayer() {
+export default function MusicPlayer({ onOpen }) {
   const { t } = useTranslation();
   const m = useSyncExternalStore(subscribeMusic, getMusic);
-  // phone: the card is collapsed into the album-art button until tapped
-  const [open, setOpen] = useState(false);
+  const store = useStore();
+  // phone: the card is collapsed into the album-art button until tapped.
+  // the flag lives in the store so the HUD can close the player when the
+  // mass panel expands — one floating panel at a time on phones.
+  const open = !!store.playerOpen;
 
   useEffect(() => {
     // the radio starts itself on entry (fades in from silence)
@@ -61,7 +65,10 @@ export default function MusicPlayer() {
       {/* phone: collapsed art button under the wallet pill */}
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          setState({ playerOpen: true });
+          onOpen?.();
+        }}
         title={t('radio')}
         aria-label={t('radio')}
         className={`pointer-events-auto absolute right-2 top-[58px] z-30 flex h-11 w-11 cursor-pointer items-center justify-center overflow-hidden rounded-full border border-white/25 bg-black/65 backdrop-blur md:right-3 ${
@@ -93,9 +100,13 @@ export default function MusicPlayer() {
         </span>
       </button>
 
-      {/* full card: always on from sm up, tap-to-open on phones */}
+      {/* full card: always on from sm up, tap-to-open on phones.
+          phone: sits below the mass-pill row (top-[100px]); opening it
+          collapses the mass panel and vice versa — one panel at a time.
+          sm+: right under the top-bar buttons, pushed down far enough to
+          clear them at every padding scale */}
       <div
-        className={`pointer-events-auto absolute right-2 top-[58px] z-30 max-w-[calc(100vw-1rem)] items-center gap-2 rounded-2xl border border-white/15 bg-black/55 p-2 pr-3 shadow-[0_8px_30px_rgba(0,0,0,0.45)] backdrop-blur-md sm:right-6 sm:top-[78px] ${
+        className={`pointer-events-auto absolute right-2 top-[100px] z-30 max-w-[calc(100vw-1rem)] items-center gap-2 rounded-2xl border border-white/15 bg-black/55 p-2 pr-3 shadow-[0_8px_30px_rgba(0,0,0,0.45)] backdrop-blur-md sm:right-6 sm:top-[88px] lg:top-[96px] 2xl:top-[112px] ${
           open ? 'flex' : 'hidden'
         } sm:flex [@media(max-height:480px)]:hidden!`}
       >
@@ -136,7 +147,7 @@ export default function MusicPlayer() {
 
           <button
             type="button"
-            onClick={() => setOpen(false)}
+            onClick={() => setState({ playerOpen: false })}
             title={t('close')}
             aria-label={t('close')}
             className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-white/20 bg-black/50 text-xs text-white/70 backdrop-blur transition hover:border-white/40 hover:text-white sm:hidden"

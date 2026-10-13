@@ -2,8 +2,10 @@
 // a balance of $1.00. Exactly four must succeed, the balance must end at 0
 // (never negative) and every spend ack must arrive in under 50ms.
 //
-//   node test/wallet-race.mjs        (BASE=http://localhost:8080 to override)
+// The seeded top-up goes through the QA-only /deposit route, so the root
+// .env's QA_TOKEN is required (BASE=http://localhost:8080 to override).
 
+import { readFileSync } from 'node:fs';
 import { io } from 'socket.io-client';
 
 const BASE = process.env.BASE || 'http://localhost:8080';
@@ -11,6 +13,18 @@ const N = 10;
 const COST = 25; // cents — EFFECT_COSTS.overload
 const START = 100; // cents — $1.00
 const CLIENT_ID = 'v_race' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+
+// QA token: env wins, else parse the repo-root .env
+const QA_TOKEN = (() => {
+  if (process.env.QA_TOKEN) return process.env.QA_TOKEN.trim();
+  try {
+    const env = readFileSync(new URL('../../.env', import.meta.url), 'utf8');
+    const m = env.match(/^QA_TOKEN=(.*)$/m);
+    return m ? m[1].trim() : '';
+  } catch {
+    return '';
+  }
+})();
 
 let failed = 0;
 const ok = (cond, label, extra = '') => {
@@ -23,11 +37,16 @@ const ok = (cond, label, extra = '') => {
 
 async function api(path, opts = {}) {
   const res = await fetch(BASE + path, {
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', 'x-qa-token': QA_TOKEN },
     ...opts,
   });
   const data = await res.json().catch(() => ({}));
   return { status: res.status, data };
+}
+
+if (!QA_TOKEN) {
+  console.log('FAIL QA_TOKEN is required (set it in .env or the environment)');
+  process.exit(1);
 }
 
 // --- top the fresh wallet up to exactly $1 -----------------------------------

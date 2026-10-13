@@ -649,8 +649,9 @@ export default function HUD({ onOpenCabinet, onOpenRecords, glCanvas, onOpenProf
         </div>
       )}
 
-      {/* cosmic radio: right under the top-bar buttons */}
-      <MusicPlayer />
+      {/* cosmic radio: right under the top-bar buttons. Opening it on phones
+          collapses the mass panel — one floating panel at a time */}
+      <MusicPlayer onOpen={() => setMassOpen(false)} />
 
       {/* mass + leaderboard: pill on phones, card on wider screens */}
       {narrow ? (
@@ -684,7 +685,11 @@ export default function HUD({ onOpenCabinet, onOpenRecords, glCanvas, onOpenProf
             </div>
           ) : (
             <button
-              onClick={() => setMassOpen(true)}
+              onClick={() => {
+                // one floating panel at a time: expanding mass collapses the player
+                setState({ playerOpen: false });
+                setMassOpen(true);
+              }}
               className="flex cursor-pointer items-center gap-2 rounded-full border border-amber-400/25 bg-black/65 py-2 pl-3 pr-2.5 backdrop-blur transition hover:border-amber-400/50"
             >
               <span className="text-[9px] uppercase tracking-[0.22em] text-white/50">

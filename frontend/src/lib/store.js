@@ -43,6 +43,9 @@ let state = {
   depositOpen: false,
   depositPreset: 0,
   insufficient: null,
+  // cosmic radio: the open state lives in the store so the HUD can close
+  // the player when the mass panel expands (phones: one panel at a time)
+  playerOpen: false,
   // ARG phase 1: a fragment of the hidden phrase (null = nothing shown)
   fragment: null,
   // ARG phase 1 solved: the void runs the stabilized (ultramarine) version

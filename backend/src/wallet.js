@@ -18,6 +18,10 @@ const pendingKey = (id) => 'void:wallet:pending:' + id;
 const seenKey = (id) => 'void:wallet:seen:' + id;
 const roomOf = (owner) => 'wallet:' + owner;
 
+// the simulated /deposit route is a QA harness only (see route below)
+const ENABLE_TEST_HOOKS = process.env.ENABLE_TEST_HOOKS === '1';
+const QA_TOKEN = String(process.env.QA_TOKEN || '').trim();
+
 // what each server-verified effect command costs, in cents
 export const EFFECT_COSTS = {
   overload: 25,
@@ -263,9 +267,17 @@ export function setupWallet({ redis, io }) {
   });
 
   // simulated gateway: creates the pending top-up and confirms it through the
-  // very same function a real payment webhook would call
+  // very same function a real payment webhook would call. QA-only — the public
+  // path is Cryptomus; without the test hooks + token this route is dark.
   router.post('/deposit', async (req, res) => {
     try {
+      if (!ENABLE_TEST_HOOKS || !QA_TOKEN) return res.status(404).json({ error: 'disabled' });
+      const got = String(req.get('x-qa-token') || (req.body && req.body.qa) || '').trim();
+      const a = Buffer.from(got);
+      const b = Buffer.from(QA_TOKEN);
+      if (!got || a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+        return res.status(401).json({ error: 'qa_token' });
+      }
       const owner = await resolveRestOwner(req);
       if (!owner) return res.status(401).json({ error: 'unauthorized' });
       const amount = Math.floor(Number(req.body && req.body.amountCents));

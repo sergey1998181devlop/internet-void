@@ -51,20 +51,7 @@ export async function fetchBalance() {
   }
 }
 
-export async function deposit(amountCents, clientId) {
-  const res = await fetch('/api/v1/wallet/deposit', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    credentials: 'same-origin',
-    body: JSON.stringify({ amountCents, clientId }),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok || !data.ok) throw new Error(data.error || 'deposit_failed');
-  if (typeof data.balance === 'number') setState({ balance: data.balance });
-  return data;
-}
-
-// ---- cryptomus gateway (real crypto payments) -----------------------------
+// ---- cryptomus gateway (the only top-up path) -----------------------------
 export async function fetchCryptoConfig() {
   try {
     const res = await fetch('/api/cryptomus/config', { credentials: 'same-origin' });

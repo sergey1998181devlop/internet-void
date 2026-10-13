@@ -38,7 +38,10 @@ const PAYOUT_KEY = process.env.CRYPTOMUS_PAYOUT_KEY || '';
 const PUBLIC_URL = (process.env.PUBLIC_URL || '').replace(/\/$/, '');
 const LIVE = process.env.CRYPTOMUS_LIVE === '1';
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
+// mock invoices are a QA harness: ENABLE_TEST_HOOKS + the QA token are both
+// required, so the stub path is dark in production even with hooks on
 const ENABLE_TEST_HOOKS = process.env.ENABLE_TEST_HOOKS === '1';
+const QA_TOKEN = String(process.env.QA_TOKEN || '').trim();
 const WEBHOOK_IPS = process.env.CRYPTOMUS_WEBHOOK_IPS ?? '91.227.144.54';
 
 const DEPOSIT_MIN = 100; // $1
@@ -268,7 +271,15 @@ export function setupCryptomus({ redis, io, wallet }) {
         return res.status(400).json({ error: 'bad_amount', min: DEPOSIT_MIN, max: DEPOSIT_MAX });
       }
 
-      const mock = ENABLE_TEST_HOOKS && req.body && req.body.mock === 1;
+      // stub invoice: QA-only (hooks + token), never reachable in production
+      const qaTok = String((req.body && req.body.qa) || req.get('x-qa-token') || '').trim();
+      const mock =
+        ENABLE_TEST_HOOKS &&
+        QA_TOKEN &&
+        req.body &&
+        req.body.mock === 1 &&
+        Boolean(qaTok) &&
+        safeEqual(qaTok, QA_TOKEN);
       if (!live && !mock) return res.status(503).json({ error: 'gateway_disabled' });
 
       const orderId = nanoid(21); // alpha_dash, unique, 21 chars

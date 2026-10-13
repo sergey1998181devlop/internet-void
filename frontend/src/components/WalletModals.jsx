@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useStore, setState, getClientId } from '../lib/store';
-import { deposit, fmtMoney, fetchCryptoConfig, createCryptoInvoice, fetchCryptoStatus } from '../lib/wallet';
+import { fmtMoney, fetchCryptoConfig, createCryptoInvoice, fetchCryptoStatus } from '../lib/wallet';
 
 // deposit presets in cents; from $50 up the server adds its own +10% bonus
 const PRESETS = [500, 1000, 2500, 5000, 10000];
@@ -85,18 +85,19 @@ export default function WalletModals() {
       setErr(t('depositRange', { min: fmtMoney(MIN), max: fmtMoney(MAX) }));
       return;
     }
+    // cryptomus is the only top-up path; before the merchant goes live the
+    // button shows a "coming soon" note instead of faking a credit
+    if (!cfg || !cfg.live) {
+      setErr(t('paySoon'));
+      return;
+    }
     setBusy(true);
     setErr('');
     try {
-      if (cfg && cfg.live) {
-        const inv = await createCryptoInvoice(cents, getClientId());
-        setPay({ url: inv.url, orderId: inv.orderId });
-        window.open(inv.url, '_blank', 'noopener,noreferrer');
-        startPoll(inv.orderId);
-      } else {
-        await deposit(cents, getClientId());
-        closeDeposit();
-      }
+      const inv = await createCryptoInvoice(cents, getClientId());
+      setPay({ url: inv.url, orderId: inv.orderId });
+      window.open(inv.url, '_blank', 'noopener,noreferrer');
+      startPoll(inv.orderId);
     } catch {
       setErr(t('depositErr'));
     } finally {
@@ -192,10 +193,14 @@ export default function WalletModals() {
                   {t('openPayPage')}
                 </a>
               </div>
+            ) : cfg && !cfg.live ? (
+              <div className="mt-4 rounded-xl border border-amber-400/40 bg-amber-500/10 px-4 py-3 text-center text-xs leading-relaxed tracking-widest text-amber-200">
+                {t('paySoon')}
+              </div>
             ) : (
               <button
                 onClick={confirm}
-                disabled={busy}
+                disabled={busy || !cfg}
                 className="mt-4 w-full cursor-pointer rounded-xl bg-emerald-500 px-4 py-3 text-xs font-black uppercase tracking-[0.2em] text-black transition hover:bg-emerald-400 disabled:opacity-50"
               >
                 {busy ? t('sending') : t('confirm')}
