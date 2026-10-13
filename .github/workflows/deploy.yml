@@ -15,54 +15,58 @@ jobs:
     name: rsync + docker compose build
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      PROD_HOST: ${{ secrets.PROD_HOST }}
+      PROD_USER: ${{ secrets.PROD_USER }}
+      PROD_PORT: ${{ secrets.PROD_PORT || 22 }}
+      PROD_PATH: ${{ secrets.PROD_PATH }}
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up SSH access
+        env:
+          PROD_SSH_KEY: ${{ secrets.PROD_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$PROD_SSH_KEY" > ~/.ssh/id_prod
+          chmod 600 ~/.ssh/id_prod
+          ssh-keyscan -p "$PROD_PORT" "$PROD_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+
       # ship sources only; server keeps its own .env, htpasswd and data
       - name: Sync sources to the server
-        uses: appleboy/rsync-action@v1
-        with:
-          host: ${{ secrets.PROD_HOST }}
-          username: ${{ secrets.PROD_USER }}
-          port: ${{ secrets.PROD_PORT || 22 }}
-          key: ${{ secrets.PROD_SSH_KEY }}
-          source: ./
-          target: ${{ secrets.PROD_PATH }}
-          rm: false
-          args: >-
-            --links
-            --times
-            --compress
-            --exclude=.git
-            --exclude=.github
-            --exclude='**/node_modules'
-            --exclude=.env
-            --exclude=nginx/htpasswd
-            --exclude=.DS_Store
+        run: |
+          rsync -az --links --times \
+            -e "ssh -i ~/.ssh/id_prod -p $PROD_PORT" \
+            --exclude=.git \
+            --exclude=.github \
+            --exclude='**/node_modules' \
+            --exclude=.env \
+            --exclude=nginx/htpasswd \
+            --exclude=.DS_Store \
+            ./ "${PROD_USER}@${PROD_HOST}:${PROD_PATH}/"
 
       - name: Build and roll over on the server
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.PROD_HOST }}
-          username: ${{ secrets.PROD_USER }}
-          port: ${{ secrets.PROD_PORT || 22 }}
-          key: ${{ secrets.PROD_SSH_KEY }}
-          script: |
-            set -e
-            cd "${{ secrets.PROD_PATH }}"
-            docker compose build backend frontend
-            docker compose up -d backend frontend
-            # wait for nginx to answer; the gate always lets 127.0.0.1 through
-            ok=0
-            for i in $(seq 1 30); do
-              if curl -fsS http://127.0.0.1:8080/ >/dev/null 2>&1; then ok=1; break; fi
-              sleep 2
-            done
-            if [ "$ok" != "1" ]; then
-              echo "healthcheck failed" >&2
-              docker compose ps >&2 || true
-              docker compose logs --tail=50 backend nginx >&2 || true
-              exit 1
-            fi
-            docker image prune -f >/dev/null 2>&1 || true
-            echo "deployed ok"
+        run: |
+          ssh -i ~/.ssh/id_prod -p "$PROD_PORT" "${PROD_USER}@${PROD_HOST}" \
+            "bash -s -- '$PROD_PATH'" <<'EOF'
+          set -e
+          cd "$1"
+          HP=$(grep -E '^HTTP_PORT=' .env 2>/dev/null | cut -d= -f2-)
+          HP=${HP:-8080}
+          docker compose build backend frontend
+          docker compose up -d backend frontend
+          # wait for the app to answer; the gate always lets 127.0.0.1 through
+          ok=0
+          for i in $(seq 1 30); do
+            if curl -fsS "http://127.0.0.1:${HP}/" >/dev/null 2>&1; then ok=1; break; fi
+            sleep 2
+          done
+          if [ "$ok" != "1" ]; then
+            echo "healthcheck failed" >&2
+            docker compose ps >&2 || true
+            docker compose logs --tail=50 backend nginx >&2 || true
+            exit 1
+          fi
+          docker image prune -f >/dev/null 2>&1 || true
+          echo "deployed ok"
+          EOF
