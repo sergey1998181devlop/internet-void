@@ -268,7 +268,7 @@ export function setupWallet({ redis, io }) {
 
   // simulated gateway: creates the pending top-up and confirms it through the
   // very same function a real payment webhook would call. QA-only — the public
-  // path is Cryptomus; without the test hooks + token this route is dark.
+  // path is NOWPayments; without the test hooks + token this route is dark.
   router.post('/deposit', async (req, res) => {
     try {
       if (!ENABLE_TEST_HOOKS || !QA_TOKEN) return res.status(404).json({ error: 'disabled' });
@@ -389,7 +389,7 @@ export function setupWallet({ redis, io }) {
     charge,
     ownerOf: resolveRestOwner,
     EFFECT_COSTS,
-    // gateway hooks (cryptomus.js): park / confirm / cancel pending top-ups
+    // gateway hooks (np.js): park / confirm / cancel pending top-ups
     queueDeposit,
     confirmTx,
     cancelPending,

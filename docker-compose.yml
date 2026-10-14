@@ -37,13 +37,11 @@ services:
       # cosmic radio player (Jamendo proxy)
       JAMENDO_CLIENT_ID: ${JAMENDO_CLIENT_ID:-}
       JAMENDO_CLIENT_SECRET: ${JAMENDO_CLIENT_SECRET:-}
-      # cryptomus gateway — real keys + CRYPTOMUS_LIVE=1 go into .env;
-      # with the dev key below signed webhooks are already verifiable
-      CRYPTOMUS_MERCHANT_ID: ${CRYPTOMUS_MERCHANT_ID:-}
-      CRYPTOMUS_PAYMENT_KEY: ${CRYPTOMUS_PAYMENT_KEY:-void-dev-payment-key}
-      CRYPTOMUS_PAYOUT_KEY: ${CRYPTOMUS_PAYOUT_KEY:-}
-      CRYPTOMUS_LIVE: ${CRYPTOMUS_LIVE:-0}
-      CRYPTOMUS_WEBHOOK_IPS: ${CRYPTOMUS_WEBHOOK_IPS:-91.227.144.54}
+      # NOWPayments gateway — real keys + NOWPAYMENTS_LIVE=1 go into .env
+      NOWPAYMENTS_API_KEY: ${NOWPAYMENTS_API_KEY:-}
+      NOWPAYMENTS_IPN_SECRET: ${NOWPAYMENTS_IPN_SECRET:-}
+      NOWPAYMENTS_LIVE: ${NOWPAYMENTS_LIVE:-0}
+      NOWPAYMENTS_WEBHOOK_IPS: ${NOWPAYMENTS_WEBHOOK_IPS:-*}
       ADMIN_TOKEN: ${ADMIN_TOKEN:-}
     volumes:
       - uploads_data:/app/uploads

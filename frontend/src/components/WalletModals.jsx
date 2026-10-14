@@ -20,7 +20,7 @@ export default function WalletModals() {
   const [amount, setAmount] = useState(5);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  // cryptomus: config flag + the invoice we are waiting on
+  // payment gateway: config flag + the invoice we are waiting on
   const [cfg, setCfg] = useState(null);
   const [pay, setPay] = useState(null);
   const pollRef = useRef(null);
@@ -85,8 +85,8 @@ export default function WalletModals() {
       setErr(t('depositRange', { min: fmtMoney(MIN), max: fmtMoney(MAX) }));
       return;
     }
-    // cryptomus is the only top-up path; before the merchant goes live the
-    // button shows a "coming soon" note instead of faking a credit
+    // crypto invoices are the only top-up path; before the gateway goes live
+    // the button shows a "coming soon" note instead of faking a credit
     if (!cfg || !cfg.live) {
       setErr(t('paySoon'));
       return;

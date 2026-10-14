@@ -12,7 +12,7 @@ import { createAuthRouter, getSession, claimGuestHistory } from './auth.js';
 import { classify, sanitizeAmount } from './tiers.js';
 import { detectEgg } from './eggs.js';
 import { setupWallet } from './wallet.js';
-import { setupCryptomus, safeEqual } from './cryptomus.js';
+import { setupPay, safeEqual } from './np.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -104,10 +104,8 @@ const userKey = (id) => 'void:user:' + id;
 const app = express();
 app.locals.redis = redis;
 app.use(cors());
-// cryptomus webhooks sign the RAW body (md5 of base64(body)+key): parse this
-// path as text BEFORE express.json swallows it — express.json skips bodies
-// body-parser already marked as parsed
-app.use('/api/cryptomus/webhook', express.text({ type: '*/*', limit: '1mb' }));
+// NOWPayments IPN is verified over the canonically re-sorted JSON payload,
+// so the webhook works fine through the regular express.json() below
 app.use(express.json({ limit: '1mb' }));
 app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '30d' }));
 
@@ -203,9 +201,9 @@ const clipUpload = multer({
 const wallet = setupWallet({ redis, io });
 app.use('/api/v1/wallet', wallet.router);
 
-// cryptomus gateway: invoices + signed webhooks + admin payouts
-const cryptomus = setupCryptomus({ redis, io, wallet });
-app.use('/api/cryptomus', cryptomus.router);
+// NOWPayments gateway: hosted invoices + IPN-signed webhooks (/api/pay/*)
+const pay = setupPay({ redis, io, wallet });
+app.use('/api/pay', pay.router);
 
 function sanitizeText(value, max = 280) {
   const s = String(value == null ? '' : value);

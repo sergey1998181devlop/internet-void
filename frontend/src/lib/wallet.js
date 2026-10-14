@@ -51,10 +51,10 @@ export async function fetchBalance() {
   }
 }
 
-// ---- cryptomus gateway (the only top-up path) -----------------------------
+// ---- NOWPayments gateway (the only top-up path) ---------------------------
 export async function fetchCryptoConfig() {
   try {
-    const res = await fetch('/api/cryptomus/config', { credentials: 'same-origin' });
+    const res = await fetch('/api/pay/config', { credentials: 'same-origin' });
     if (!res.ok) return { live: false };
     return await res.json();
   } catch {
@@ -63,7 +63,7 @@ export async function fetchCryptoConfig() {
 }
 
 export async function createCryptoInvoice(amountCents, clientId) {
-  const res = await fetch('/api/cryptomus/invoice', {
+  const res = await fetch('/api/pay/invoice', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     credentials: 'same-origin',
@@ -76,7 +76,7 @@ export async function createCryptoInvoice(amountCents, clientId) {
 
 export async function fetchCryptoStatus(orderId, clientId) {
   const res = await fetch(
-    '/api/cryptomus/status?orderId=' + encodeURIComponent(orderId) + '&clientId=' + encodeURIComponent(clientId || ''),
+    '/api/pay/status?orderId=' + encodeURIComponent(orderId) + '&clientId=' + encodeURIComponent(clientId || ''),
     { credentials: 'same-origin' }
   );
   if (!res.ok) throw new Error('status_failed');
