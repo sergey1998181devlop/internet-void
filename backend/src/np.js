@@ -27,7 +27,8 @@ import { nanoid } from 'nanoid';
 //
 // Config (env): NOWPAYMENTS_API_KEY, NOWPAYMENTS_IPN_SECRET,
 //   NOWPAYMENTS_LIVE=1, NOWPAYMENTS_API_BASE, NOWPAYMENTS_WEBHOOK_IPS
-//   (comma list, '*' disables), PUBLIC_URL, ENABLE_TEST_HOOKS, QA_TOKEN
+//   (comma list, '*' disables), NOWPAYMENTS_PAY_CURRENCY,
+//   NOWPAYMENTS_CARD_BUFFER, PUBLIC_URL, ENABLE_TEST_HOOKS, QA_TOKEN
 // ---------------------------------------------------------------------------
 
 const API_BASE = (process.env.NOWPAYMENTS_API_BASE || 'https://api.nowpayments.io/v1').replace(/\/$/, '');
@@ -43,6 +44,14 @@ const WEBHOOK_IPS = process.env.NOWPAYMENTS_WEBHOOK_IPS ?? '*';
 
 const DEPOSIT_MIN = 100; // $1
 const DEPOSIT_MAX = 1000000; // $10 000
+// the card widget (ChangeNOW) sends crypto to the invoice address, but the
+// on-ramp takes its own fee out of the fiat amount — we pre-fill the widget
+// with a buffered sum so the crypto that lands covers the invoice in full
+const PAY_CURRENCY = (process.env.NOWPAYMENTS_PAY_CURRENCY || 'usdttrc20').toLowerCase();
+const CARD_BUFFER = (() => {
+  const n = parseFloat(process.env.NOWPAYMENTS_CARD_BUFFER || '');
+  return Number.isFinite(n) && n >= 1 && n <= 2 ? n : 1.08;
+})();
 const INVOICE_LIFETIME = 3600; // seconds
 const INV_TTL = 60 * 60 * 24 * 30; // audit record lives 30 days
 const ORDER_RE = /^[A-Za-z0-9_-]{10,64}$/;
@@ -289,6 +298,33 @@ export function setupPay({ redis, io, wallet }) {
         return res.status(502).json({ error: 'upstream_failed', message: (json && json.message) || null });
       }
       await redis.hset(invKey(orderId), 'npId', String(json.id || ''), 'status', 'waiting');
+
+      // bind a pay-in to the invoice server-side: the deposit address is what
+      // the card widget (ChangeNOW) sends the purchased crypto to; failure
+      // here is non-fatal — the hosted NOWPayments page still works
+      let payin = null;
+      const pr = await api('POST', '/invoice-payment', { iid: String(json.id), pay_currency: PAY_CURRENCY });
+      if (pr.http >= 200 && pr.http < 300 && pr.json && pr.json.pay_address) {
+        payin = {
+          address: String(pr.json.pay_address),
+          network: String(pr.json.network || ''),
+          currency: PAY_CURRENCY,
+          amount: pr.json.pay_amount || null,
+          paymentId: String(pr.json.payment_id || ''),
+        };
+        await redis.hset(
+          invKey(orderId),
+          'payAddress',
+          payin.address,
+          'payCurrency',
+          PAY_CURRENCY,
+          'paymentId',
+          payin.paymentId
+        );
+      } else {
+        console.error('[np] invoice-payment failed http=' + pr.http + ' msg=' + ((pr.json && pr.json.message) || ''));
+      }
+
       res.json({
         ok: true,
         orderId,
@@ -296,6 +332,9 @@ export function setupPay({ redis, io, wallet }) {
         url: json.invoice_url,
         expiresAt: json.expires_at || null,
         bonus: q.bonus || 0,
+        payin,
+        // fiat sum the card widget is pre-filled with (invoice + buffer)
+        cardFiat: Math.ceil((amount / 100) * CARD_BUFFER),
       });
     } catch (e) {
       console.error('[np] invoice', e.message);

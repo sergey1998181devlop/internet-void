@@ -42,6 +42,10 @@ services:
       NOWPAYMENTS_IPN_SECRET: ${NOWPAYMENTS_IPN_SECRET:-}
       NOWPAYMENTS_LIVE: ${NOWPAYMENTS_LIVE:-0}
       NOWPAYMENTS_WEBHOOK_IPS: ${NOWPAYMENTS_WEBHOOK_IPS:-*}
+      # card widget (ChangeNOW): coin the invoice address expects and the
+      # fiat buffer pre-filled into the widget to cover the on-ramp fee
+      NOWPAYMENTS_PAY_CURRENCY: ${NOWPAYMENTS_PAY_CURRENCY:-usdttrc20}
+      NOWPAYMENTS_CARD_BUFFER: ${NOWPAYMENTS_CARD_BUFFER:-1.08}
       ADMIN_TOKEN: ${ADMIN_TOKEN:-}
     volumes:
       - uploads_data:/app/uploads

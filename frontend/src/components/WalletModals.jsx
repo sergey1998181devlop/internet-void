@@ -20,6 +20,7 @@ export default function WalletModals() {
   const [amount, setAmount] = useState(5);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  const [copied, setCopied] = useState(false);
   // payment gateway: config flag + the invoice we are waiting on
   const [cfg, setCfg] = useState(null);
   const [pay, setPay] = useState(null);
@@ -46,6 +47,7 @@ export default function WalletModals() {
       setErr('');
       setBusy(false);
       setPay(null);
+      setCopied(false);
       stopPoll();
     }
   }, [store.depositOpen, store.depositPreset]);
@@ -95,8 +97,7 @@ export default function WalletModals() {
     setErr('');
     try {
       const inv = await createCryptoInvoice(cents, getClientId());
-      setPay({ url: inv.url, orderId: inv.orderId });
-      window.open(inv.url, '_blank', 'noopener,noreferrer');
+      setPay({ url: inv.url, orderId: inv.orderId, payin: inv.payin || null, cardFiat: inv.cardFiat || null, cents });
       startPoll(inv.orderId);
     } catch {
       setErr(t('depositErr'));
@@ -184,6 +185,61 @@ export default function WalletModals() {
                 <div className="rounded-xl border border-amber-400/40 bg-amber-500/10 px-3 py-3 text-center text-xs uppercase tracking-widest text-amber-200">
                   {t('waitPayment')}
                 </div>
+                {pay.payin && (
+                  <>
+                    <div className="rounded-xl border border-white/15 bg-black/40 px-3 py-2">
+                      <div className="text-[10px] uppercase tracking-widest text-white/40">
+                        {t('payAddress')} · USDT TRC20
+                      </div>
+                      <div className="mt-1 flex items-center gap-2">
+                        <code className="min-w-0 flex-1 break-all text-[11px] leading-relaxed text-emerald-200">
+                          {pay.payin.address}
+                        </code>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard?.writeText(pay.payin.address);
+                            setCopied(true);
+                            setTimeout(() => setCopied(false), 1500);
+                          }}
+                          className="shrink-0 cursor-pointer rounded-lg border border-white/20 px-2 py-1 text-[10px] uppercase tracking-widest text-white/70 transition hover:border-white/45 hover:text-white"
+                        >
+                          {copied ? t('copied') : t('copy')}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="overflow-hidden rounded-xl border border-white/15">
+                      <iframe
+                        title="card-pay"
+                        src={
+                          'https://changenow.io/embeds/exchange-widget/v2/widget.html?' +
+                          new URLSearchParams({
+                            isFiat: 'true',
+                            fromFiat: 'usd',
+                            amountFiat: String(pay.cardFiat || Math.ceil((pay.cents || 0) / 100)),
+                            to: pay.payin.currency,
+                            address: pay.payin.address,
+                            currencies_to: pay.payin.currency,
+                            FAQ: 'false',
+                            locales: 'false',
+                            logo: 'true',
+                            horizontal: 'false',
+                            darkMode: 'true',
+                            primaryColor: '00C26F',
+                            backgroundColor: '07060A',
+                          }).toString()
+                        }
+                        className="h-[430px] w-full"
+                        style={{ border: 0 }}
+                      />
+                    </div>
+                    <div className="text-[10px] leading-relaxed text-white/45">
+                      {t('payCardHint', {
+                        sum: fmtMoney((pay.cardFiat || 0) * 100),
+                        base: fmtMoney(pay.cents || 0),
+                      })}
+                    </div>
+                  </>
+                )}
                 <a
                   href={pay.url}
                   target="_blank"
