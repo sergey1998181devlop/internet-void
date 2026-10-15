@@ -13,6 +13,7 @@ import { classify, sanitizeAmount } from './tiers.js';
 import { detectEgg } from './eggs.js';
 import { setupWallet } from './wallet.js';
 import { setupPay, safeEqual } from './np.js';
+import { setupCryptomus } from './cryptomus.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -36,11 +37,6 @@ const ENABLE_TEST_HOOKS = process.env.ENABLE_TEST_HOOKS === '1';
 // including a free test=1 throw — needs the same token on the request. An
 // empty token keeps the whole QA surface dark even with the hooks enabled.
 const QA_TOKEN = String(process.env.QA_TOKEN || '').trim();
-// pre-launch gate: nginx asks /api/entry/auth (auth_request) on every request;
-// both creds empty means the gate is open — that is the launched state.
-const ENTRY_USER = String(process.env.ENTRY_USER || '').trim();
-const ENTRY_PASS = String(process.env.ENTRY_PASS || '');
-const ENTRY_AUTH_ON = Boolean(ENTRY_USER && ENTRY_PASS);
 
 const qaTokenOk = (req) => {
   if (!ENABLE_TEST_HOOKS || !QA_TOKEN) return false;
@@ -104,6 +100,11 @@ const userKey = (id) => 'void:user:' + id;
 const app = express();
 app.locals.redis = redis;
 app.use(cors());
+// Cryptomus webhooks sign the RAW body (md5 of base64(body)+key): the shared
+// webhook path must stay unparsed text so the signature is recomputed over
+// the exact bytes; NOWPayments HMAC rides the re-serialized JSON and copes
+// with a string body (np.js parses it back itself)
+app.use('/api/pay/webhook', express.text({ type: '*/*', limit: '1mb' }));
 // NOWPayments IPN is verified over the canonically re-sorted JSON payload,
 // so the webhook works fine through the regular express.json() below
 app.use(express.json({ limit: '1mb' }));
@@ -201,9 +202,75 @@ const clipUpload = multer({
 const wallet = setupWallet({ redis, io });
 app.use('/api/v1/wallet', wallet.router);
 
-// NOWPayments gateway: hosted invoices + IPN-signed webhooks (/api/pay/*)
-const pay = setupPay({ redis, io, wallet });
-app.use('/api/pay', pay.router);
+// crypto payment gateways under neutral /api/pay/* paths (the provider never
+// shows up in a URL). Cryptomus is the primary once its API key is live;
+// NOWPayments keeps taking invoices as the fallback — Cryptomus moderation
+// can flip the upstream off, and the site must never stop selling balance.
+// Both webhooks share one URL, demultiplexed by signature scheme.
+const cm = setupCryptomus({ redis, io, wallet });
+const np = setupPay({ redis, io, wallet });
+
+// circuit breaker: after a Cryptomus upstream failure stop touching it for
+// a minute instead of paying the dead round-trip on every invoice
+let cmDownUntil = 0;
+
+app.get('/api/pay/config', (_req, res) => {
+  res.json({ live: cm.live() || np.live(), min: 100, max: 1000000, currency: 'USD' });
+});
+
+// invoice: Cryptomus first; an upstream failure falls back to NOWPayments
+// (each gateway records its own orderId + pending top-up, never both)
+app.post('/api/pay/invoice', (req, res) => {
+  if (!cm.live() || Date.now() < cmDownUntil) return np.handlers.invoice(req, res);
+
+  const origStatus = res.status.bind(res);
+  const origJson = res.json.bind(res);
+  let code = 200;
+  res.status = (c) => {
+    code = c;
+    return res;
+  };
+  res.json = (payload) => {
+    res.status = origStatus;
+    res.json = origJson;
+    const upstreamDead =
+      code >= 500 ||
+      (payload && (payload.error === 'upstream_failed' || payload.error === 'server_error'));
+    if (upstreamDead && np.live()) {
+      cmDownUntil = Date.now() + 60000;
+      console.warn(
+        '[pay] cryptomus invoice failed (code=' + code + ' err=' + ((payload && payload.error) || '') + '), falling back to nowpayments'
+      );
+      return np.handlers.invoice(req, res);
+    }
+    return origJson(payload);
+  };
+  cm.handlers.invoice(req, res);
+});
+
+// status: the order's redis hash tells which gateway owns it (void:cm:inv:*
+// vs void:np:inv:*), unknown ids land on the np handler and 404 there
+app.get('/api/pay/status', async (req, res) => {
+  try {
+    const id = String(req.query.orderId || '');
+    if (/^[A-Za-z0-9_-]{10,64}$/.test(id) && (await redis.exists('void:cm:inv:' + id))) {
+      return cm.handlers.status(req, res);
+    }
+  } catch {
+    // fall through to the np status handler
+  }
+  return np.handlers.status(req, res);
+});
+
+// one webhook URL for both providers: NOWPayments signs a header, Cryptomus
+// signs the raw body — the express.text() parser above keeps the bytes intact
+app.post('/api/pay/webhook', (req, res) => {
+  if (req.get('x-nowpayments-sig')) return np.handlers.webhook(req, res);
+  return cm.handlers.webhook(req, res);
+});
+
+// admin crypto payouts (ADMIN_TOKEN), Cryptomus only
+app.post('/api/pay/payout', cm.handlers.payout);
 
 function sanitizeText(value, max = 280) {
   const s = String(value == null ? '' : value);
@@ -982,32 +1049,6 @@ app.post('/api/gamma', async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
-});
-
-// ---------------------------------------------------------------------------
-// pre-launch gate. nginx runs this as an auth_request subrequest for every
-// request it serves (html, assets, api, uploads, socket.io). Browsers answer
-// the Basic challenge once and replay the header on every later call, so the
-// SPA, the wallet and the realtime feed all stay behind the same door.
-// ENTRY_USER/ENTRY_PASS empty -> the gate is open and the site is launched.
-// ---------------------------------------------------------------------------
-app.get('/api/entry/auth', (req, res) => {
-  if (!ENTRY_AUTH_ON) return res.status(200).json({ ok: true, gate: 'off' });
-  const header = String(req.get('authorization') || '');
-  if (!header.startsWith('Basic ')) return res.status(401).json({ error: 'challenge' });
-  let pair = '';
-  try {
-    pair = Buffer.from(header.slice(6), 'base64').toString('utf8');
-  } catch {
-    pair = '';
-  }
-  const i = pair.indexOf(':');
-  const user = i >= 0 ? pair.slice(0, i) : pair;
-  const pass = i >= 0 ? pair.slice(i + 1) : '';
-  if (!safeEqual(user, ENTRY_USER) || !safeEqual(pass, ENTRY_PASS)) {
-    return res.status(401).json({ error: 'challenge' });
-  }
-  res.status(200).json({ ok: true, gate: 'on' });
 });
 
 // the QA panel asks this once on boot: only a live token turns it on. The

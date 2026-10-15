@@ -26,6 +26,7 @@ import FeedTicker from './components/FeedTicker';
 import ProfileDrawer from './components/ProfileDrawer';
 import ProfileEdit from './components/ProfileEdit';
 import WalletModals from './components/WalletModals';
+import LegalFooter from './components/LegalFooter';
 import { useStore, consumeQueue, getClientId, getState, enqueueEvent } from './lib/store';
 import { handleAuthCallback } from './auth';
 import { orbit } from './scene/orbit';
@@ -266,6 +267,7 @@ export default function App() {
       <ProfileDrawer name={profileName} onClose={() => setProfileName('')} />
       <ProfileEdit open={editProfile} onClose={() => setEditProfile(false)} />
       <WalletModals />
+      <LegalFooter />
     </div>
   );
 }

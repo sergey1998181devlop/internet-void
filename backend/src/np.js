@@ -223,16 +223,18 @@ export function setupPay({ redis, io, wallet }) {
   };
 
   // ---- REST ---------------------------------------------------------------
-  const router = express.Router();
+  // the /api/pay/* contract the facade in index.js dispatches; the handlers
+  // are exported so NOWPayments can serve as the Cryptomus fallback
+  const handlers = {};
 
   // public feature flag for the deposit modal
-  router.get('/config', (_req, res) => {
+  handlers.config = (_req, res) => {
     res.json({ live, min: DEPOSIT_MIN, max: DEPOSIT_MAX, currency: 'USD' });
-  });
+  };
 
   // create a hosted invoice; the pending top-up exists BEFORE the invoice so
   // an IPN can never arrive for an order we did not record
-  router.post('/invoice', async (req, res) => {
+  handlers.invoice = async (req, res) => {
     try {
       const owner = await wallet.ownerOf(req);
       if (!owner) return res.status(401).json({ error: 'unauthorized' });
@@ -340,11 +342,11 @@ export function setupPay({ redis, io, wallet }) {
       console.error('[np] invoice', e.message);
       res.status(500).json({ error: 'server_error' });
     }
-  });
+  };
 
   // pull the invoice status server-side (signed request) and process it
   // through the exact same logic as the webhook — recovers missed IPNs
-  router.get('/status', async (req, res) => {
+  handlers.status = async (req, res) => {
     try {
       const owner = await wallet.ownerOf(req);
       if (!owner) return res.status(401).json({ error: 'unauthorized' });
@@ -377,12 +379,13 @@ export function setupPay({ redis, io, wallet }) {
       console.error('[np] status', e.message);
       res.status(500).json({ error: 'server_error' });
     }
-  });
+  };
 
   // ---- IPN webhook --------------------------------------------------------
-  // body arrives through express.json(); the signature is computed over the
-  // canonically re-serialized payload, so raw-byte formatting never matters
-  router.post('/webhook', async (req, res) => {
+  // body arrives through express.text()/express.json(); the signature is
+  // computed over the canonically re-serialized payload, so raw-byte
+  // formatting never matters
+  handlers.webhook = async (req, res) => {
     try {
       const ip = clientIp(req);
       if (!ipAllowed(ip)) {
@@ -421,7 +424,15 @@ export function setupPay({ redis, io, wallet }) {
       console.error('[np] webhook', e.message);
       res.status(500).json({ error: 'server_error' });
     }
-  });
+  };
 
-  return { router, processEvent, live: () => live };
+  // standalone router for the rare direct mount; the facade in index.js
+  // prefers the handlers above so Cryptomus can take over per-request
+  const router = express.Router();
+  router.get('/config', handlers.config);
+  router.post('/invoice', handlers.invoice);
+  router.get('/status', handlers.status);
+  router.post('/webhook', handlers.webhook);
+
+  return { router, handlers, processEvent, live: () => live };
 }

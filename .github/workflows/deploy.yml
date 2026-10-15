@@ -37,7 +37,7 @@ jobs:
           fi
           ssh-keyscan -p "$PROD_PORT" "$PROD_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
 
-      # ship sources only; server keeps its own .env, htpasswd and data
+      # ship sources only; server keeps its own .env and data
       - name: Sync sources to the server
         run: |
           rsync -az --links --times \
@@ -46,7 +46,6 @@ jobs:
             --exclude=.github \
             --exclude='**/node_modules' \
             --exclude=.env \
-            --exclude=nginx/htpasswd \
             --exclude=.DS_Store \
             ./ "${PROD_USER}@${PROD_HOST}:${PROD_PATH}/"
 
@@ -60,7 +59,7 @@ jobs:
           HP=${HP:-8080}
           docker compose build backend frontend
           docker compose up -d backend frontend
-          # wait for the app to answer; the gate always lets 127.0.0.1 through
+          # wait for the app to answer; the site is public, no auth gate
           ok=0
           for i in $(seq 1 30); do
             if curl -fsS "http://127.0.0.1:${HP}/" >/dev/null 2>&1; then ok=1; break; fi

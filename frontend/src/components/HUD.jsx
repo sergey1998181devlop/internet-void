@@ -645,6 +645,16 @@ export default function HUD({ onOpenCabinet, onOpenRecords, glCanvas, onOpenProf
               {sound ? t('soundOff') : t('soundOn')}
               <span className="text-white/50">{sound ? '🔊' : '🔇'}</span>
             </button>
+            {/* legal strip: desktop keeps it in the bottom-left corner */}
+            <div className="pt-2 text-center text-[10px] uppercase tracking-[0.25em] text-white/40">
+              <div className="flex items-center justify-center gap-3">
+                <span className="rounded border border-white/20 px-1 py-px text-white/50">18+</span>
+                <a href="/terms.html" className="hover:text-white/80">Terms</a>
+                <a href="/privacy.html" className="hover:text-white/80">Privacy</a>
+                <a href="/refund.html" className="hover:text-white/80">Refunds</a>
+              </div>
+              <div className="mt-2 text-white/25">support@internetvoid.com</div>
+            </div>
           </div>
         </div>
       )}
