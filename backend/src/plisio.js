@@ -328,7 +328,7 @@ export function setupPlisio({ redis, io, wallet }) {
         // ?json=true is mandatory: it makes Plisio POST a verifiable JSON body
         callback_url: PUBLIC_URL + '/api/pay/webhook?json=true',
         success_url: PUBLIC_URL + '/?topup=success',
-        cancel_url: PUBLIC_URL + '/',
+        cancel_url: PUBLIC_URL + '/?topup=failed',
         description: 'InternetVoid balance top-up ' + orderId,
         expire_min: Math.round(INVOICE_LIFETIME / 60),
         plugin: 'internet-void',
