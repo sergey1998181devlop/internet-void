@@ -244,11 +244,6 @@ export default function WalletModals() {
                     </div>
                   </>
                 )}
-                {!pay.payin && (
-                  <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-[10px] leading-relaxed text-amber-200">
-                    {t('payCardMin', { min: fmtMoney(2000) })}
-                  </div>
-                )}
                 <a
                   href={pay.url}
                   target="_blank"

@@ -52,9 +52,9 @@ const CARD_BUFFER = (() => {
 
 const DEPOSIT_MIN = (() => {
   const n = parseInt(process.env.PLISIO_DEPOSIT_MIN || '', 10);
-  // Plisio floors a USDT_TRX invoice above $5 (422 "must be greater than:
-  // 5.000000") — the default keeps a small margin over the fiat rate
-  return Number.isFinite(n) && n >= 100 && n <= 1000000 ? n : 550;
+  // Plisio floor for USDT_TRX invoices is exactly $5.00 (probed live: $5.00
+  // is accepted, $4.99 returns 422 "must be greater than: 5.000000")
+  return Number.isFinite(n) && n >= 100 && n <= 1000000 ? n : 500;
 })();
 const DEPOSIT_MAX = 1000000; // $10 000
 const INVOICE_LIFETIME = 3600; // seconds (expire_min=60)
