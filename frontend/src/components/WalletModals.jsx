@@ -82,9 +82,13 @@ export default function WalletModals() {
   };
 
   const confirm = async () => {
+    // deposit bounds come from the live gateway (Plisio floors at >$5);
+    // the constants above stay as the pre-config fallback
+    const min = Number(cfg && cfg.min) > 0 ? Number(cfg.min) : MIN;
+    const max = Number(cfg && cfg.max) > 0 ? Number(cfg.max) : MAX;
     const cents = Math.floor(Number(amount) * 100);
-    if (!Number.isFinite(cents) || cents < MIN || cents > MAX) {
-      setErr(t('depositRange', { min: fmtMoney(MIN), max: fmtMoney(MAX) }));
+    if (!Number.isFinite(cents) || cents < min || cents > max) {
+      setErr(t('depositRange', { min: fmtMoney(min), max: fmtMoney(max) }));
       return;
     }
     // crypto invoices are the only top-up path; before the gateway goes live
@@ -166,8 +170,8 @@ export default function WalletModals() {
               <span className="text-xl font-black text-emerald-300">$</span>
               <input
                 type="number"
-                min={MIN / 100}
-                max={MAX / 100}
+                min={(Number(cfg && cfg.min) > 0 ? Number(cfg.min) : MIN) / 100}
+                max={(Number(cfg && cfg.max) > 0 ? Number(cfg.max) : MAX) / 100}
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 className="w-full rounded-xl border border-white/15 bg-black/50 px-3 py-2.5 text-base text-white outline-none focus:border-emerald-400/60 sm:py-2 sm:text-sm"

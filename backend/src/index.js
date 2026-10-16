@@ -14,6 +14,7 @@ import { detectEgg } from './eggs.js';
 import { setupWallet } from './wallet.js';
 import { setupPay, safeEqual } from './np.js';
 import { setupCryptomus } from './cryptomus.js';
+import { setupPlisio } from './plisio.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -203,26 +204,36 @@ const wallet = setupWallet({ redis, io });
 app.use('/api/v1/wallet', wallet.router);
 
 // crypto payment gateways under neutral /api/pay/* paths (the provider never
-// shows up in a URL). Cryptomus is the primary once its API key is live;
-// NOWPayments keeps taking invoices as the fallback — Cryptomus moderation
-// can flip the upstream off, and the site must never stop selling balance.
-// Both webhooks share one URL, demultiplexed by signature scheme.
+// shows up in a URL). Plisio is the primary; Cryptomus and NOWPayments stay
+// wired as fallbacks for whenever their APIs are (re)enabled — a failed
+// upstream transparently falls through to the next live gateway.
+// Both/all callbacks share one URL, demultiplexed by signature scheme.
+const pl = setupPlisio({ redis, io, wallet });
 const cm = setupCryptomus({ redis, io, wallet });
 const np = setupPay({ redis, io, wallet });
 
-// circuit breaker: after a Cryptomus upstream failure stop touching it for
+// circuit breakers: after an upstream failure stop touching that gateway for
 // a minute instead of paying the dead round-trip on every invoice
+let plDownUntil = 0;
 let cmDownUntil = 0;
 
-app.get('/api/pay/config', (_req, res) => {
-  res.json({ live: cm.live() || np.live(), min: 100, max: 1000000, currency: 'USD' });
+// feature flag for the deposit modal — served by the primary live gateway
+// so min/max always reflect what its invoices actually accept
+app.get('/api/pay/config', (req, res) => {
+  if (pl.live()) return pl.handlers.config(req, res);
+  if (cm.live()) return cm.handlers.config(req, res);
+  if (np.live()) return np.handlers.config(req, res);
+  return res.json({ live: false, min: 100, max: 1000000, currency: 'USD' });
 });
 
-// invoice: Cryptomus first; an upstream failure falls back to NOWPayments
-// (each gateway records its own orderId + pending top-up, never both)
-app.post('/api/pay/invoice', (req, res) => {
-  if (!cm.live() || Date.now() < cmDownUntil) return np.handlers.invoice(req, res);
-
+// invoice: run the chain of live gateways in order; an upstream failure
+// (502/500 or a disabled gateway) opens that gateway's circuit breaker and
+// falls through to the next one. Each gateway records its own orderId +
+// pending top-up, never two at once.
+const runInvoiceChain = (gws, req, res) => {
+  const gw = gws[0];
+  if (!gw) return res.status(503).json({ error: 'gateway_disabled' });
+  const rest = gws.slice(1);
   const origStatus = res.status.bind(res);
   const origJson = res.json.bind(res);
   let code = 200;
@@ -233,28 +244,42 @@ app.post('/api/pay/invoice', (req, res) => {
   res.json = (payload) => {
     res.status = origStatus;
     res.json = origJson;
-    const upstreamDead =
+    const failed =
       code >= 500 ||
-      (payload && (payload.error === 'upstream_failed' || payload.error === 'server_error'));
-    if (upstreamDead && np.live()) {
-      cmDownUntil = Date.now() + 60000;
+      (payload && (payload.error === 'upstream_failed' || payload.error === 'server_error' || payload.error === 'gateway_disabled'));
+    if (failed && rest.length) {
+      if (gw.markDown) gw.markDown();
       console.warn(
-        '[pay] cryptomus invoice failed (code=' + code + ' err=' + ((payload && payload.error) || '') + '), falling back to nowpayments'
+        '[pay] ' + gw.id + ' failed (code=' + code + ' err=' + ((payload && payload.error) || '') + '), falling back'
       );
-      return np.handlers.invoice(req, res);
+      return runInvoiceChain(rest, req, res);
     }
     return origJson(payload);
   };
-  cm.handlers.invoice(req, res);
+  gw.handlers.invoice(req, res);
+};
+
+app.post('/api/pay/invoice', (req, res) => {
+  const chain = [];
+  if (pl.live() && Date.now() >= plDownUntil) {
+    chain.push({ id: 'plisio', handlers: pl.handlers, markDown: () => (plDownUntil = Date.now() + 60000) });
+  }
+  if (cm.live() && Date.now() >= cmDownUntil) {
+    chain.push({ id: 'cryptomus', handlers: cm.handlers, markDown: () => (cmDownUntil = Date.now() + 60000) });
+  }
+  if (np.live()) chain.push({ id: 'nowpayments', handlers: np.handlers });
+  // nothing live: np still serves the QA mock invoice and the 503 flag
+  runInvoiceChain(chain.length ? chain : [np], req, res);
 });
 
-// status: the order's redis hash tells which gateway owns it (void:cm:inv:*
-// vs void:np:inv:*), unknown ids land on the np handler and 404 there
+// status: the order's redis hash tells which gateway owns it (void:<gw>:inv:*)
+// ids unknown to every gateway land on the np handler and 404 there
 app.get('/api/pay/status', async (req, res) => {
   try {
     const id = String(req.query.orderId || '');
-    if (/^[A-Za-z0-9_-]{10,64}$/.test(id) && (await redis.exists('void:cm:inv:' + id))) {
-      return cm.handlers.status(req, res);
+    if (/^[A-Za-z0-9_-]{10,64}$/.test(id)) {
+      if (await redis.exists('void:plisio:inv:' + id)) return pl.handlers.status(req, res);
+      if (await redis.exists('void:cm:inv:' + id)) return cm.handlers.status(req, res);
     }
   } catch {
     // fall through to the np status handler
@@ -262,10 +287,21 @@ app.get('/api/pay/status', async (req, res) => {
   return np.handlers.status(req, res);
 });
 
-// one webhook URL for both providers: NOWPayments signs a header, Cryptomus
-// signs the raw body — the express.text() parser above keeps the bytes intact
+// one webhook URL for every provider, demultiplexed by signature scheme:
+// NOWPayments signs a header, Plisio a verify_hash inside the JSON body,
+// Cryptomus the raw body — all three bodies stay intact under the
+// express.text() parser installed above
 app.post('/api/pay/webhook', (req, res) => {
   if (req.get('x-nowpayments-sig')) return np.handlers.webhook(req, res);
+  let probe = req.body;
+  if (typeof probe === 'string') {
+    try {
+      probe = JSON.parse(probe);
+    } catch {
+      probe = null;
+    }
+  }
+  if (probe && typeof probe === 'object' && typeof probe.verify_hash === 'string') return pl.handlers.webhook(req, res);
   return cm.handlers.webhook(req, res);
 });
 
